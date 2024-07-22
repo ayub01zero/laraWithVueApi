@@ -16,6 +16,8 @@ Route::post('/logout', [AuthenticationController::class, 'logout'])->middleware(
 
 
 Route::apiResource('/posts', PostController::class)->middleware('auth:sanctum');
+Route::post('/update/post/{post}', [PostController::class, 'UpdatePost'])->middleware('auth:sanctum');
+
 
 
 

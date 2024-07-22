@@ -1,8 +1,10 @@
 import { createApp } from 'vue';
 import router from './routes/index'; 
 import VueSweetalert2 from 'vue-sweetalert2'; 
-import 'flowbite';
 import './bootstrap';
+import 'flowbite';
+
+
 
 createApp({})
     .use(VueSweetalert2) 

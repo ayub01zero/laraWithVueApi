@@ -8,68 +8,88 @@ import Login from '../components/Auth/login.vue';
 import Register from '../components/Auth/register.vue';
 import NotFound from '../components/notfound.vue';
 
-// Function to check if user is authenticated
+// Authentication check
 const isAuthenticated = () => {
-    const loggedIn = JSON.parse(localStorage.getItem('loggedIn'));
-    const apiToken = localStorage.getItem('ApiToken');
-    return loggedIn === true && apiToken !== null;
+    return JSON.parse(localStorage.getItem('loggedIn')) === true 
+           && localStorage.getItem('ApiToken') !== null;
 };
 
-// Authentication guard
-const authGuard = (to, from, next) => {
-    if (to.meta.requiresAuth && !isAuthenticated()) {
-        next('/auth/login'); 
-    } else if ((to.name === 'login' || to.name === 'register') && isAuthenticated()) {
-        next('/posts'); 
-    } else {
-        next(); //
-    }
-};
+// Route meta creator
+const createRouteMeta = (title, requiresAuth = true) => ({ title, requiresAuth });
 
-// Define your routes
+// Routes configuration
 const routes = [
     {
         path: '/',
-        redirect: { name: 'posts.index' },
         component: AuthenticatedLayout,
-        beforeEnter: authGuard,
         children: [
+            {
+                path: '',
+                redirect: { name: 'posts.index' }
+            },
             {
                 path: 'posts',
                 name: 'posts.index',
                 component: PostsIndex,
-                meta: { title: 'Posts', requiresAuth: true }
+                meta: createRouteMeta('Posts')
             },
             {
                 path: 'posts/create',
                 name: 'posts.create',
                 component: PostsCreate,
-                meta: { title: 'Add new post', requiresAuth: true }
+                meta: createRouteMeta('Add new post')
             },
             {
                 path: 'posts/edit/:id',
                 name: 'posts.edit',
                 component: PostsEdit,
-                meta: { title: 'Edit post', requiresAuth: true }
+                meta: createRouteMeta('Edit post')
             }
         ]
     },
     {
         path: '/auth',
         component: GuestLayout,
-        beforeEnter: authGuard,
         children: [
-            { path: 'login', name: 'login', component: Login },
-            { path: 'register', name: 'register', component: Register }
+            { 
+                path: 'login', 
+                name: 'login', 
+                component: Login,
+                meta: createRouteMeta('Login', false)
+            },
+            { 
+                path: 'register', 
+                name: 'register', 
+                component: Register,
+                meta: createRouteMeta('Register', false)
+            }
         ]
     },
-    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound }
+    { 
+        path: '/:pathMatch(.*)*', 
+        name: 'not-found', 
+        component: NotFound,
+        meta: createRouteMeta('Not Found', false)
+    }
 ];
 
 // Create the router instance
 const router = createRouter({
     history: createWebHistory(),
     routes
+});
+
+// Global navigation guard
+router.beforeEach((to, from, next) => {
+    document.title = `${to.meta.title} | Vue With Ayo`;
+    
+    if (to.meta.requiresAuth && !isAuthenticated()) {
+        next({ name: 'login' });
+    } else if (['login', 'register'].includes(to.name) && isAuthenticated()) {
+        next({ name: 'posts.index' });
+    } else {
+        next();
+    }
 });
 
 export default router;

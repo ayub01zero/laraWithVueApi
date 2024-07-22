@@ -1,67 +1,55 @@
 import { ref, reactive, computed } from 'vue';
 import { useRouter } from 'vue-router';
-
-
-const user = reactive({ name: '', email: '' });
+import axios from 'axios';
 
 export default function useAuth() {
+    const router = useRouter();
+    const user = reactive({ name: '', email: '' });
     const processing = ref(false);
     const validationErrors = ref({});
-    const router = useRouter();
     const loginForm = reactive({ email: '', password: '', remember: false });
     const registerForm = reactive({ name: '', email: '', password: '' });
 
-    const isLoggedIn = computed(() => localStorage.getItem('ApiToken') !== null);
+    const isLoggedIn = computed(() => !!localStorage.getItem('ApiToken'));
 
-    const handleErrors = (error) => {
-        if (error.response?.status === 422) {
-            validationErrors.value = error.response.data.errors;
-        } else {
-            console.error(error.response?.data.message || error.message);
-        }
-    };
-
-    const submitLogin = async () => {
+    const handleRequest = async (requestFn) => {
         if (processing.value) return;
 
         processing.value = true;
         validationErrors.value = {};
 
         try {
-            await axios.get('/sanctum/csrf-cookie');
-            const { data } = await axios.post('/api/login', loginForm);
-            const token = data.token;
-
-            localStorage.setItem('ApiToken', token);
-            await loginUser(data);
+            return await requestFn();
         } catch (error) {
-            handleErrors(error);
+            if (error.response?.status === 422) {
+                validationErrors.value = error.response.data.errors;
+            } else {
+                console.error(error.response?.data.message || error.message);
+            }
         } finally {
             processing.value = false;
         }
     };
 
-    const submitRegister = async () => {
-        if (processing.value) return;
+    const submitLogin = () => handleRequest(async () => {
+        await axios.get('/sanctum/csrf-cookie');
+        const { data } = await axios.post('/api/login', loginForm);
+        localStorage.setItem('ApiToken', data.token);
+        await loginUser(data);
+    });
 
-        processing.value = true;
-        validationErrors.value = {};
-
-        try {
-            await axios.post('/api/register', registerForm);
-            await router.push({ name: 'login' });
-        } catch (error) {
-            handleErrors(error);
-        } finally {
-            processing.value = false;
-        }
-    };
+    const submitRegister = () => handleRequest(async () => {
+        await axios.post('/api/register', registerForm);
+        router.push({ name: 'login' });
+    });
 
     const loginUser = async (data) => {
-        user.name = data.name || data.user?.name || '';
-        user.email = data.email || data.user?.email || '';
-        localStorage.setItem('loggedIn', JSON.stringify(true));
-        await router.push({ name: 'posts.index' });
+        Object.assign(user, {
+            name: data.name || data.user?.name || '',
+            email: data.email || data.user?.email || ''
+        });
+        localStorage.setItem('loggedIn', 'true');
+        router.push({ name: 'posts.index' });
     };
 
     const getUser = () => {
@@ -74,23 +62,13 @@ export default function useAuth() {
         }
     };
 
-    const logout = async () => {
-        if (processing.value) return;
-
-        processing.value = true;
-
-        try {
-            await axios.post('/api/logout');
-            localStorage.removeItem('ApiToken');
-            localStorage.removeItem('loggedIn');
-            delete axios.defaults.headers.common['Authorization'];
-            await router.push({ name: 'login' });
-        } catch (error) {
-            console.error(error.response?.statusText || error.message);
-        } finally {
-            processing.value = false;
-        }
-    };
+    const logout = () => handleRequest(async () => {
+        await axios.post('/api/logout');
+        localStorage.removeItem('ApiToken');
+        localStorage.removeItem('loggedIn');
+        delete axios.defaults.headers.common['Authorization'];
+        router.push({ name: 'login' });
+    });
 
     return {
         loginForm,

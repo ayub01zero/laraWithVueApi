@@ -9,7 +9,7 @@ class Post extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['title', 'content', 'user_id'];
+    protected $fillable = ['title', 'content', 'user_id', 'image'];
 
 
     public function scopeSearch($query, $search)
@@ -22,4 +22,5 @@ class Post extends Model
     {
         return $this->belongsTo(User::class);
     }
+
 }

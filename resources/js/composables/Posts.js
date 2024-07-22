@@ -1,4 +1,4 @@
-import { ref, inject } from 'vue' 
+import { ref, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -10,90 +10,102 @@ export default function usePosts() {
     const isLoading = ref(false)
     const swal = inject('$swal')
 
-    // Get all posts with pagination
-    const getPosts = async (page = 1) => {
-        isLoading.value = true;
-        try {
-            const response = await axios.get('/api/posts?page=' + page);
-            posts.value = response.data;
-        } catch (error) {
-            console.error('Error fetching posts:', error.response?.data.message || error.message);
-        } finally {
-            isLoading.value = false;
+    const api = axios.create({
+        baseURL: '/api',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
         }
-    };
+    })
 
-    // Store a new post
-    const storePost = async (post) => {
-        if (isLoading.value) return;
+    const handleApiError = (error, customErrorMessage) => {
+        console.error(customErrorMessage, error.response?.data.message || error.message)
+        if (error.response?.data?.errors) {
+            validationErrors.value = error.response.data.errors
+        }
+        swal({
+            icon: 'error',
+            title: 'An error occurred',
+            text: customErrorMessage
+        })
+    }
+
+    const getPosts = async (page = 1, searchQuery = '') => {
+        isLoading.value = true
+        try {
+            const response = await api.get(`/posts?page=${page}&search=${searchQuery}`)
+            posts.value = response.data
+        } catch (error) {
+            handleApiError(error, 'Error fetching posts')
+        } finally {
+            isLoading.value = false
+        }
+    }
+
+    const storePost = async (postData) => {
+        if (isLoading.value) return
 
         isLoading.value = true
         validationErrors.value = {}
 
-        let serializedPost = new FormData()
-        for (let item in post) {
-            if (post.hasOwnProperty(item)) {
-                serializedPost.append(item, post[item])
-            }
-        }
+        const formData = new FormData()
+        Object.keys(postData).forEach(key => formData.append(key, postData[key]))
 
         try {
-            await axios.post('/api/posts', serializedPost);
+            await api.post('/posts', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            })
             router.push({ name: 'posts.index' })
             swal({
                 icon: 'success',
                 title: 'Post saved successfully'
             })
         } catch (error) {
-            if (error.response?.data) {
-                validationErrors.value = error.response.data.errors
-            }
+            handleApiError(error, 'Error saving post')
         } finally {
             isLoading.value = false
         }
     }
 
-    // Get a single post by ID
     const getPost = async (id) => {
         isLoading.value = true
         try {
-            const response = await axios.get(`/api/posts/${id}`);
-            post.value = response.data;
+            const response = await api.get(`/posts/${id}`)
+            post.value = response.data.data
         } catch (error) {
-            console.error('Error fetching post:', error.response?.data.message || error.message);
+            handleApiError(error, 'Error fetching post')
         } finally {
             isLoading.value = false
         }
     }
 
-    // Update a post by ID
-    const updatePost = async (post) => {
-        if (isLoading.value) return;
+    const updatePost = async (formData, id) => {
+        if (isLoading.value) return
 
         isLoading.value = true
         validationErrors.value = {}
 
         try {
-            await axios.put(`/api/posts/${post.id}`, post);
+            const response = await api.post(`/update/post/${id}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            })
+            post.value = response.data.data
             router.push({ name: 'posts.index' })
             swal({
                 icon: 'success',
                 title: 'Post updated successfully'
             })
         } catch (error) {
-            if (error.response?.data) {
-                validationErrors.value = error.response.data.errors
-            }
+            handleApiError(error, 'Error updating post')
         } finally {
             isLoading.value = false
         }
     }
 
-    // Delete a post by ID
     const deletePost = async (id) => {
-        swal({
+        const result = await swal({
             title: 'Are you sure?',
-            text: 'You won\'t be able to revert this action!',
+            text: "You won't be able to revert this action!",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonText: 'Yes, delete it!',
@@ -102,37 +114,20 @@ export default function usePosts() {
             timerProgressBar: true,
             reverseButtons: true
         })
-        .then(async result => {
-            if (result.isConfirmed) {
-                try {
-                    await axios.delete(`/api/posts/${id}`);
-                    getPosts();
-                    router.push({ name: 'posts.index' })
-                    swal({
-                        icon: 'success',
-                        title: 'Post deleted successfully'
-                    })
-                } catch (error) {
-                    swal({
-                        icon: 'error',
-                        title: 'Something went wrong'
-                    })
-                }
-            }
-        })
-    }
 
-    const searchPosts = async (searchQuery) => {
-        isLoading.value = true;
-        try {
-            const response = await axios.get(`/api/posts?search=${searchQuery}`);
-            posts.value = response.data;
-        } catch (error) {
-            console.error('Error searching posts:', error.response?.data.message || error.message);
-        } finally {
-            isLoading.value = false;
+        if (result.isConfirmed) {
+            try {
+                await api.delete(`/posts/${id}`)
+                await getPosts()
+                swal({
+                    icon: 'success',
+                    title: 'Post deleted successfully'
+                })
+            } catch (error) {
+                handleApiError(error, 'Error deleting post')
+            }
         }
-    };
+    }
 
     return {
         posts,
@@ -143,7 +138,6 @@ export default function usePosts() {
         updatePost,
         deletePost,
         validationErrors,
-        isLoading,
-        searchPosts
+        isLoading
     }
 }
